@@ -1,0 +1,10 @@
+{
+  "name": "一起AA",
+  "short_name": "一起AA",
+  "description": "朋友旅行一起记账，自动算清谁该给谁多少钱。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f3ea",
+  "theme_color": "#f7f3ea",
+  "lang": "zh-CN"
+}
