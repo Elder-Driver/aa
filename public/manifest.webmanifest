@@ -1,10 +1,10 @@
 {
-  "name": "一起AA",
-  "short_name": "一起AA",
-  "description": "朋友旅行一起记账，自动算清谁该给谁多少钱。",
+  "name": "分账搭子 SplitPack",
+  "short_name": "分账搭子",
+  "description": "旅行分账工具，默认美元，支持中文和英文。",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f7f3ea",
-  "theme_color": "#f7f3ea",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
   "lang": "zh-CN"
 }

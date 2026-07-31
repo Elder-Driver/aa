@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { AAApp } from "./aa-app";
 
 export const metadata: Metadata = {
-  title: "一起AA｜旅行分账，轻松算清",
-  description: "创建旅行账本，邀请朋友一起记账，只和实际参与的人分摊。",
+  title: "分账搭子 SplitPack",
+  description: "创建旅行账本，邀请朋友一起记录支出，并自动算出最少转账方案。",
 };
 
 export default function Home() {

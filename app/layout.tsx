@@ -9,21 +9,21 @@ export async function generateMetadata(): Promise<Metadata> {
   const metadataBase = new URL(`${protocol}://${host}`);
   return {
     metadataBase,
-    title: "一起AA｜旅行分账，轻松算清",
-    description: "无须注册的多人旅行 AA 记账工具。",
-    applicationName: "一起AA",
+    title: "分账搭子 SplitPack",
+    description: "多人旅行分账工具。创建账本、邀请朋友、记录支出，并生成最少转账方案。",
+    applicationName: "分账搭子",
     manifest: "/manifest.webmanifest",
-    appleWebApp: { capable: true, title: "一起AA", statusBarStyle: "default" },
+    appleWebApp: { capable: true, title: "分账搭子", statusBarStyle: "default" },
     icons: { icon: "/favicon.svg", apple: "/favicon.svg" },
-    openGraph: { title: "一起AA", description: "旅途尽兴，分钱不费心。", images: [{ url: "/og.png", width: 1200, height: 630 }] },
-    twitter: { card: "summary_large_image", title: "一起AA", description: "旅途尽兴，分钱不费心。", images: ["/og.png"] },
+    openGraph: { title: "分账搭子 SplitPack", description: "旅行分账，不绕弯。" },
+    twitter: { card: "summary", title: "分账搭子 SplitPack", description: "旅行分账，不绕弯。" },
   };
 }
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f7f3ea",
+  themeColor: "#f6f4ef",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -4,7 +4,7 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
 export const books = sqliteTable("books", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  currency: text("currency").notNull().default("CNY"),
+  currency: text("currency").notNull().default("USD"),
   inviteTokenHash: text("invite_token_hash").notNull(),
   adminTokenHash: text("admin_token_hash").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),

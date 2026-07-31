@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const body = await request.json() as { name?: string; currency?: string; nickname?: string };
     const name = validateText(body.name, "账本名称", 40);
     const nickname = validateText(body.nickname, "昵称", 24);
-    const currency = currencies.has(body.currency ?? "") ? body.currency! : "CNY";
+    const currency = currencies.has(body.currency ?? "") ? body.currency! : "USD";
     const inviteToken = token(); const adminToken = token(); const memberToken = token();
     const bookId = makeId("book"); const memberId = makeId("mem");
     const db = getDb();
