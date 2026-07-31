@@ -1,40 +1,55 @@
-# 分账搭子 SplitPack
+# SplitPack
 
-多人旅行分账工具。创建账本、邀请朋友加入、记录支出，并按净余额生成最少转账方案。
+A lightweight trip expense splitter for groups. Create a book, invite friends,
+record expenses, split by selected participants, and settle with the fewest
+transfers.
 
-## 功能
+## Features
 
-- 默认美元，可选择人民币、欧元、英镑、日元等常用币种
-- 中文优先，支持 English 切换
-- 邀请链接加入，无需邮箱注册
-- 支持部分成员分摊
-- 支持均分和自定义金额
-- 支持记录实际还款
-- 使用 Cloudflare D1 保存数据
+- Defaults to USD, with common currency options
+- Chinese-first UI with an English switch
+- Invite-link based joining, no email accounts
+- Equal or custom splits
+- Partial participant splits
+- Settlement recording
+- Cloudflare D1 persistence
 
-## 本地开发
-
-```bash
-pnpm install
-pnpm dev
-```
-
-## 构建
+## Local development
 
 ```bash
-pnpm build
+npm install
+npm run dev
 ```
 
-## Cloudflare 自动部署建议
+## Build
 
-在 Cloudflare 创建 Worker 时选择 `Continue with GitHub`，连接本仓库。
+```bash
+npm run build
+```
 
-推荐设置：
+## Cloudflare Git deployment
+
+Create a Worker from GitHub and select this repository.
+
+Recommended settings:
 
 - Repository: `Elder-Driver/aa`
 - Production branch: `main`
-- Build command: `pnpm build`
-- Output: 使用项目生成的 Cloudflare Worker 构建产物
-- D1 binding: `DB`
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
+- Node version: `22` or newer
 
-数据库结构通过 `drizzle/` 里的 SQL migration 管理。以后如果修改数据库结构，需要先生成并提交 migration，再部署。
+Create a Cloudflare D1 database first, then add these environment variables in
+the Worker Git deployment settings:
+
+```text
+D1_DATABASE_NAME=aa-db
+D1_DATABASE_ID=<your Cloudflare D1 database id>
+```
+
+The D1 binding name used by the app is `DB`. The build reads the real database
+ID from `D1_DATABASE_ID` and writes it into the generated Wrangler deploy
+configuration.
+
+Database schema changes live in `drizzle/`. Commit migrations before deploying
+schema changes.
