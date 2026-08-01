@@ -15,7 +15,7 @@ type Tab = "home" | "expenses" | "members" | "settle";
 
 const copy = {
   zh: {
-    appName: "分账搭子",
+    appName: "AA",
     tagline: "旅行分账，不绕弯",
     createBook: "新建账本",
     bookName: "账本名称",
@@ -41,11 +41,11 @@ const copy = {
     paidBy: "付款",
     splitBy: "人分摊",
     balances: "成员余额",
-    paid: "已付",
+    paid: "付款",
     owes: "应付",
     receives: "应收",
-    owed: "应承担",
-    net: "净额",
+    owed: "分到",
+    net: "余额",
     viewSettle: "看怎么结清",
     emptyExpenses: "还没有账目",
     emptyExpensesHint: "先记一笔住宿、打车或吃饭。",
@@ -99,7 +99,7 @@ const copy = {
     language: "English",
   },
   en: {
-    appName: "SplitPack",
+    appName: "AA",
     tagline: "Split trips without the spreadsheet",
     createBook: "New trip",
     bookName: "Trip name",
@@ -195,6 +195,7 @@ const langKey = "splitpack:lang";
 const recentKey = "splitpack:recent";
 const today = () => new Date().toISOString().slice(0, 10);
 const sessionKey = (invite: string) => `splitpack:${invite}`;
+const bookPath = (invite: string) => `/b/${encodeURIComponent(invite)}`;
 
 function minorFromInput(value: string, currency: string) {
   const amount = Number(value);
@@ -213,6 +214,11 @@ function money(value: number, currency: string) {
     minimumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
     maximumFractionDigits: zeroDecimal.has(currency) ? 0 : 2,
   }).format(value / (zeroDecimal.has(currency) ? 1 : 100));
+}
+
+function signedMoney(value: number, currency: string) {
+  if (value === 0) return money(0, currency);
+  return `${value > 0 ? "+" : "-"}${money(Math.abs(value), currency)}`;
 }
 
 function initials(name: string) {
@@ -259,14 +265,18 @@ export function AAApp() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (storedLang === "zh" || storedLang === "en") setLang(storedLang);
     const params = new URLSearchParams(window.location.search);
-    const foundInvite = params.get("book") || "";
+    const pathInvite = /^\/b\/([^/?#]+)\/?$/.exec(window.location.pathname)?.[1] || "";
+    const foundInvite = pathInvite ? decodeURIComponent(pathInvite) : params.get("book") || "";
     const incomingMember = params.get("member");
     const incomingMemberId = params.get("memberId");
+    if (foundInvite) params.delete("book");
     if (foundInvite && incomingMember && incomingMemberId) {
       localStorage.setItem(sessionKey(foundInvite), JSON.stringify({ memberToken: incomingMember, memberId: incomingMemberId }));
       params.delete("member");
       params.delete("memberId");
-      history.replaceState(null, "", params.toString() ? `/?${params.toString()}` : "/");
+    }
+    if (foundInvite && (pathInvite !== foundInvite || window.location.search.includes("book=") || incomingMember || incomingMemberId)) {
+      history.replaceState(null, "", `${bookPath(foundInvite)}${params.toString() ? `?${params.toString()}` : ""}`);
     }
     setRecentBooks(readRecentBooks());
     setInvite(foundInvite);
@@ -330,8 +340,17 @@ export function AAApp() {
     setInvite(nextInvite);
     setIdentity(nextIdentity);
     setData(null);
-    history.replaceState(null, "", `/?book=${encodeURIComponent(nextInvite)}`);
+    history.replaceState(null, "", bookPath(nextInvite));
     void load(nextInvite);
+  }
+
+  function goHome() {
+    setInvite("");
+    setIdentity(null);
+    setData(null);
+    setError("");
+    setTab("home");
+    history.replaceState(null, "", "/");
   }
 
   function forgetRecentBook(targetInvite: string) {
@@ -343,7 +362,7 @@ export function AAApp() {
 
   if (loading) return <LoadingScreen text={t.loading} />;
   if (!invite) return <Landing lang={lang} t={t} recentBooks={recentBooks} onLang={switchLang} onCreated={enterBook} onOpenRecent={(book) => enterBook(book.invite, book.identity)} onForgetRecent={forgetRecentBook} />;
-  if (error && !data) return <MessageScreen title={t.cannotOpen} detail={error} action={t.backHome} onAction={() => { history.replaceState(null, "", "/"); setInvite(""); setError(""); }} />;
+  if (error && !data) return <MessageScreen title={t.cannotOpen} detail={error} action={t.backHome} onAction={goHome} />;
   if (!data) return <LoadingScreen text={t.loading} />;
   if (!identity) return <Join lang={lang} t={t} book={data.book} invite={invite} onLang={switchLang} onJoined={(next) => enterBook(invite, next)} />;
 
@@ -356,7 +375,7 @@ export function AAApp() {
   return (
     <main className="app-shell" lang={lang === "zh" ? "zh-CN" : "en"}>
       <header className="topbar">
-        <button className="brand" onClick={() => setTab("home")} aria-label={t.appName}><span className="brand-mark">SP</span><span>{t.appName}</span></button>
+        <button className="brand" onClick={goHome} aria-label={t.appName}><span className="brand-mark logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><span>{t.appName}</span></button>
         <div className="top-actions">
           <button className="ghost-button" onClick={switchLang}>{t.language}</button>
           <button className="share-button" onClick={() => setShareOpen(true)}>↗ {t.inviteFriends}</button>
@@ -374,7 +393,7 @@ export function AAApp() {
 
       <section className="quick-stats">
         <StatCard label={t.totalSpent} value={money(data.totalSpent, data.book.currency)} />
-        <StatCard label={t.myBalance} value={money(Math.abs(myBalance), data.book.currency)} tone={myBalance >= 0 ? "positive" : "negative"} prefix={myBalance >= 0 ? t.receives : t.owes} />
+        <StatCard label={t.myBalance} value={signedMoney(myBalance, data.book.currency)} tone={myBalance >= 0 ? "positive" : "negative"} />
         <button className="primary action-card" onClick={() => { setSelectedExpense(null); setExpenseOpen(true); }}>+ {t.addExpense}</button>
       </section>
 
@@ -391,12 +410,12 @@ export function AAApp() {
 
       <button className="fab" onClick={() => { setSelectedExpense(null); setExpenseOpen(true); }}>+ {t.addExpense}</button>
 
-      {expenseOpen && <ExpenseModal t={t} data={data} expense={selectedExpense} editable={!selectedExpense || canEdit(selectedExpense)} invite={invite} authedFetch={authedFetch} onClose={() => { setExpenseOpen(false); setSelectedExpense(null); }} onChanged={async () => { await load(); setExpenseOpen(false); setSelectedExpense(null); }} />}
+      {expenseOpen && <ExpenseModal t={t} data={data} expense={selectedExpense} currentMemberId={identity.memberId} editable={!selectedExpense || canEdit(selectedExpense)} invite={invite} authedFetch={authedFetch} onClose={() => { setExpenseOpen(false); setSelectedExpense(null); }} onChanged={async () => { await load(); setExpenseOpen(false); setSelectedExpense(null); }} />}
       {shareOpen && <ShareModal t={t} invite={invite} data={data} identity={identity} authedFetch={authedFetch} onClose={() => setShareOpen(false)} onInviteChanged={(next) => {
         localStorage.setItem(sessionKey(next), JSON.stringify(identity));
         localStorage.removeItem(sessionKey(invite));
         setInvite(next);
-        history.replaceState(null, "", `/?book=${encodeURIComponent(next)}`);
+        history.replaceState(null, "", bookPath(next));
       }} />}
       {error && <Toast message={error} onClose={() => setError("")} />}
     </main>
@@ -427,7 +446,7 @@ function Landing({ lang, t, recentBooks, onLang, onCreated, onOpenRecent, onForg
   return (
     <main className="landing" lang={lang === "zh" ? "zh-CN" : "en"}>
       <header className="landing-nav">
-        <div className="brand"><span className="brand-mark">SP</span><span>{t.appName}</span></div>
+        <div className="brand"><span className="brand-mark logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><span>{t.appName}</span></div>
         <button className="ghost-button" onClick={onLang}>{t.language}</button>
       </header>
       <section className="landing-panel">
@@ -482,7 +501,7 @@ function Join({ lang, t, book, invite, onLang, onJoined }: { lang: Lang; t: Text
     <main className="center-screen" lang={lang === "zh" ? "zh-CN" : "en"}>
       <button className="floating-lang" onClick={onLang}>{t.language}</button>
       <div className="join-card">
-        <span className="brand-mark big">SP</span>
+        <span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span>
         <p className="eyebrow">{t.joinTitle}</p>
         <h1>{book.name}</h1>
         <form onSubmit={submit}>
@@ -550,7 +569,7 @@ function BalanceRow({ t, member, currency }: { t: Text; member: Member; currency
     <div className="balance-row">
       <span className="avatar">{initials(member.name)}</span>
       <div><b>{member.name}</b><small>{t.paid} {money(member.paid, currency)} · {t.owed} {money(member.owed, currency)}</small></div>
-      <strong className={member.balance >= 0 ? "positive" : "negative"}>{member.balance >= 0 ? t.receives : t.owes} {money(Math.abs(member.balance), currency)}</strong>
+      <strong className={member.balance >= 0 ? "positive" : "negative"}>{signedMoney(member.balance, currency)}</strong>
     </div>
   );
 }
@@ -562,7 +581,7 @@ function Members({ t, data, identity, invite, authedFetch, onChanged }: { t: Tex
     if (!response.ok) { setMessage(await readError(response, t.networkError)); return; }
     const result = await response.json() as { memberToken?: string; memberId?: string };
     if (type === "regenerate" && result.memberToken) {
-      const url = `${location.origin}/?book=${encodeURIComponent(invite)}&member=${encodeURIComponent(result.memberToken)}&memberId=${encodeURIComponent(member.id)}`;
+      const url = `${location.origin}${bookPath(invite)}?member=${encodeURIComponent(result.memberToken)}&memberId=${encodeURIComponent(member.id)}`;
       await navigator.clipboard.writeText(url);
       setMessage(t.memberLinkCopied);
     } else {
@@ -576,7 +595,7 @@ function Members({ t, data, identity, invite, authedFetch, onChanged }: { t: Tex
       <div className="member-grid">{data.members.map((member) => <article className={`member-card ${member.inactive ? "muted" : ""}`} key={member.id}>
         <div className="member-top"><span className="avatar large-avatar">{initials(member.name)}</span><div><h3>{member.name}{member.id === identity.memberId && <em>{t.currentUser}</em>}</h3><p>{member.isCreator ? t.creator : member.inactive ? t.inactive : t.member}</p></div></div>
         <div className="mini-stats"><span>{t.paid}<b>{money(member.paid, data.book.currency)}</b></span><span>{t.owed}<b>{money(member.owed, data.book.currency)}</b></span></div>
-        <div className={`net ${member.balance >= 0 ? "positive" : "negative"}`}><span>{member.balance >= 0 ? t.receives : t.owes}</span><b>{money(Math.abs(member.balance), data.book.currency)}</b></div>
+        <div className={`net ${member.balance >= 0 ? "positive" : "negative"}`}><span>{t.net}</span><b>{signedMoney(member.balance, data.book.currency)}</b></div>
         {identity.adminToken && !member.isCreator && <div className="member-actions"><button onClick={() => action(member, "regenerate")}>{t.regenerate}</button><button onClick={() => action(member, member.inactive ? "reactivate" : "deactivate")}>{member.inactive ? t.reactivate : t.deactivate}</button></div>}
       </article>)}</div>
       {message && <Toast message={message} onClose={() => setMessage("")} />}
@@ -611,11 +630,12 @@ function Settle({ t, data, memberName, authedFetch, invite, onChanged }: { t: Te
   );
 }
 
-function ExpenseModal({ t, data, expense, editable, invite, authedFetch, onClose, onChanged }: { t: Text; data: Snapshot; expense: Expense | null; editable: boolean; invite: string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; onClose: () => void; onChanged: () => Promise<void> }) {
+function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, authedFetch, onClose, onChanged }: { t: Text; data: Snapshot; expense: Expense | null; currentMemberId: string; editable: boolean; invite: string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; onClose: () => void; onChanged: () => Promise<void> }) {
   const activeMembers = data.members.filter((member) => !member.inactive);
   const [title, setTitle] = useState(expense?.title || "");
   const [amountInput, setAmountInput] = useState(expense ? inputFromMinor(expense.amount, data.book.currency) : "");
-  const [paidBy, setPaidBy] = useState(expense?.paidBy || activeMembers[0]?.id || "");
+  const defaultPaidBy = activeMembers.some((member) => member.id === currentMemberId) ? currentMemberId : activeMembers[0]?.id || "";
+  const [paidBy, setPaidBy] = useState(expense?.paidBy || defaultPaidBy);
   const [date, setDate] = useState(expense?.expenseDate || today());
   const [mode, setMode] = useState<"equal" | "custom">(expense ? "custom" : "equal");
   const [selected, setSelected] = useState<string[]>(expense ? expense.shares.map((share) => share.memberId) : activeMembers.map((member) => member.id));
@@ -679,7 +699,7 @@ function ExpenseModal({ t, data, expense, editable, invite, authedFetch, onClose
 function ShareModal({ t, invite, data, identity, authedFetch, onClose, onInviteChanged }: { t: Text; invite: string; data: Snapshot; identity: Identity; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; onClose: () => void; onInviteChanged: (invite: string) => void }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const url = typeof location === "undefined" ? "" : `${location.origin}/?book=${encodeURIComponent(invite)}`;
+  const url = typeof location === "undefined" ? "" : `${location.origin}${bookPath(invite)}`;
   async function copyLink() {
     await navigator.clipboard.writeText(url);
     setCopied(true);
@@ -724,11 +744,11 @@ function Empty({ title, detail, action, onAction }: { title: string; detail: str
 }
 
 function LoadingScreen({ text }: { text: string }) {
-  return <main className="center-screen"><div className="loader"><span className="brand-mark big">SP</span><p>{text}</p></div></main>;
+  return <main className="center-screen"><div className="loader"><span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><p>{text}</p></div></main>;
 }
 
 function MessageScreen({ title, detail, action, onAction }: { title: string; detail: string; action: string; onAction: () => void }) {
-  return <main className="center-screen"><div className="join-card"><span className="brand-mark big">SP</span><h1>{title}</h1><p>{detail}</p><button className="primary large" onClick={onAction}>{action}</button></div></main>;
+  return <main className="center-screen"><div className="join-card"><span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><h1>{title}</h1><p>{detail}</p><button className="primary large" onClick={onAction}>{action}</button></div></main>;
 }
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {

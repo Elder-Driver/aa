@@ -9,14 +9,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const metadataBase = new URL(`${protocol}://${host}`);
   return {
     metadataBase,
-    title: "分账搭子 SplitPack",
-    description: "多人旅行分账工具。创建账本、邀请朋友、记录支出，并生成最少转账方案。",
-    applicationName: "分账搭子",
+    title: "AA",
+    description: "Split trip expenses with friends and settle up with fewer transfers.",
+    applicationName: "AA",
     manifest: "/manifest.webmanifest",
-    appleWebApp: { capable: true, title: "分账搭子", statusBarStyle: "default" },
+    appleWebApp: { capable: true, title: "AA", statusBarStyle: "default" },
     icons: { icon: "/favicon.svg", apple: "/favicon.svg" },
-    openGraph: { title: "分账搭子 SplitPack", description: "旅行分账，不绕弯。" },
-    twitter: { card: "summary", title: "分账搭子 SplitPack", description: "旅行分账，不绕弯。" },
+    openGraph: { title: "AA", description: "Split trip expenses with friends." },
+    twitter: { card: "summary", title: "AA", description: "Split trip expenses with friends." },
   };
 }
 

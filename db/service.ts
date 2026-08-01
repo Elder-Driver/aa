@@ -14,7 +14,7 @@ export function jsonError(error: unknown) {
 }
 
 export function token() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
