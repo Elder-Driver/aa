@@ -17,7 +17,7 @@ const copy = {
   zh: {
     appName: "AA",
     brandText: ".aaa.codes",
-    tagline: "旅行分账，不绕弯",
+    tagline: "出门一起玩，账也轻松分",
     createBook: "新建账本",
     bookName: "账本名称",
     bookPlaceholder: "例如：New York weekend",
@@ -26,7 +26,7 @@ const copy = {
     currency: "币种",
     create: "创建账本",
     creating: "创建中...",
-    openInvite: "已有邀请链接？直接打开链接即可加入。",
+    openInvite: "新建一个旅行账本，把链接发给朋友。谁花了钱就记一笔，最后按最少转账结清。",
     inviteFriends: "邀请朋友",
     travelBook: "账本",
     membersCount: "位成员",
@@ -102,7 +102,7 @@ const copy = {
   en: {
     appName: "AA",
     brandText: ".aaa.codes",
-    tagline: "Split trips without the spreadsheet",
+    tagline: "Split the trip, keep the fun",
     createBook: "New trip",
     bookName: "Trip name",
     bookPlaceholder: "e.g. New York weekend",
@@ -111,7 +111,7 @@ const copy = {
     currency: "Currency",
     create: "Create trip",
     creating: "Creating...",
-    openInvite: "Have an invite? Open the link to join.",
+    openInvite: "Create a trip book, send the link, record shared costs, and settle with the fewest transfers.",
     inviteFriends: "Invite",
     travelBook: "Trip",
     membersCount: "members",
@@ -387,7 +387,7 @@ export function AAApp() {
       <section className="book-heading">
         <div>
           <p className="eyebrow">{t.travelBook}</p>
-          <h1>{data.book.name}</h1>
+          <h1 className="book-title"><span>{data.book.name}</span></h1>
           <p className="book-meta">{activeCount} {t.membersCount} · {data.book.currency}</p>
         </div>
         <div className="user-chip"><span className="avatar small">{initials(me?.name || t.currentUser)}</span><span>{me?.name || t.currentUser}</span></div>
@@ -462,7 +462,7 @@ function Landing({ lang, t, recentBooks, onLang, onCreated, onOpenRecent, onForg
               {recentBooks.map((book) => <article key={book.invite}>
                 <button type="button" className="recent-main" onClick={() => onOpenRecent(book)}>
                   <span className="avatar small">{initials(book.name)}</span>
-                  <span><b>{book.name}</b><small>{book.memberName || book.currency} · {new Date(book.updatedAt).toLocaleDateString()}</small></span>
+                  <span><b title={book.name}>{book.name}</b><small>{book.memberName || book.currency} · {new Date(book.updatedAt).toLocaleDateString()}</small></span>
                 </button>
                 <button type="button" className="recent-forget" onClick={() => onForgetRecent(book.invite)} aria-label={lang === "zh" ? "移除最近账本" : "Remove recent trip"}>×</button>
               </article>)}
@@ -505,7 +505,7 @@ function Join({ lang, t, book, invite, onLang, onJoined }: { lang: Lang; t: Text
       <div className="join-card">
         <BrandMark big />
         <p className="eyebrow">{t.joinTitle}</p>
-        <h1>{book.name}</h1>
+        <h1 className="book-title"><span>{book.name}</span></h1>
         <form onSubmit={submit}>
           <label>{t.nickname}<input autoFocus value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={t.nicknamePlaceholder} maxLength={24} required /></label>
           {error && <p className="form-error">{error}</p>}

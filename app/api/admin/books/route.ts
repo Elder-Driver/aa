@@ -4,6 +4,7 @@ type AdminBookRow = {
   id: string;
   name: string;
   currency: string;
+  inviteToken: string;
   createdAt: string;
   lastActivityAt: string;
   membersCount: number;
@@ -30,6 +31,7 @@ async function listBooks() {
       b.id,
       b.name,
       b.currency,
+      b.invite_token AS inviteToken,
       b.created_at AS createdAt,
       COALESCE((
         SELECT MAX(value) FROM (

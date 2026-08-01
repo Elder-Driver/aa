@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AdminBook = {
   id: string;
   name: string;
   currency: string;
+  inviteToken: string;
   createdAt: string;
   lastActivityAt: string;
   membersCount: number;
@@ -38,10 +39,12 @@ export function AdminApp() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [days, setDays] = useState(30);
+  const [copiedBook, setCopiedBook] = useState("");
+  const triedStoredKey = useRef(false);
 
   const staleEmpty = useMemo(() => data?.books.filter((book) => book.expensesCount === 0 && book.settlementsCount === 0 && ageDays(book.createdAt) >= days) ?? [], [data, days]);
 
-  async function load(nextKey = key) {
+  const load = useCallback(async (nextKey: string) => {
     setBusy(true);
     setError("");
     try {
@@ -52,10 +55,17 @@ export function AdminApp() {
       setData(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load admin data");
+      setData(null);
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (triedStoredKey.current || !key) return;
+    triedStoredKey.current = true;
+    void load(key);
+  }, [key, load]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -82,6 +92,13 @@ export function AdminApp() {
     }
   }
 
+  async function copyInvite(book: AdminBook) {
+    const url = `${location.origin}/b/${encodeURIComponent(book.inviteToken)}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedBook(book.id);
+    window.setTimeout(() => setCopiedBook(""), 1600);
+  }
+
   async function removeBook(book: AdminBook) {
     if (!confirm(`Delete "${book.name}" and all its data?`)) return;
     setBusy(true);
@@ -98,6 +115,12 @@ export function AdminApp() {
     }
   }
 
+  function changeKey() {
+    localStorage.removeItem(adminKeyStorage);
+    setData(null);
+    setError("");
+  }
+
   return (
     <main className="admin-shell">
       <header className="admin-header">
@@ -105,10 +128,10 @@ export function AdminApp() {
         <Link href="/">Back to app</Link>
       </header>
 
-      <form className="admin-key-card" onSubmit={submit}>
+      {!data ? <form className="admin-key-card" onSubmit={submit}>
         <label>Admin key<input value={key} onChange={(event) => setKey(event.target.value)} placeholder="ADMIN_KEY" type="password" /></label>
         <button className="primary" disabled={busy || !key}>{busy ? "Loading..." : "Load database"}</button>
-      </form>
+      </form> : <div className="admin-session-card"><span>Admin connected</span><button className="secondary" type="button" onClick={() => load(key)} disabled={busy}>{busy ? "Refreshing..." : "Refresh"}</button><button className="secondary" type="button" onClick={changeKey}>Change key</button></div>}
       {error && <p className="form-error">{error}</p>}
 
       {data && <>
@@ -128,13 +151,13 @@ export function AdminApp() {
         <section className="admin-table-card">
           <div className="section-head"><h2>Recent books</h2><button className="secondary" disabled={busy} onClick={() => load(key)}>Refresh</button></div>
           <div className="admin-table">
-            <div className="admin-row admin-row-head"><span>Name</span><span>Last activity</span><span>Data</span><span>Total</span><span /></div>
+            <div className="admin-row admin-row-head"><span>Name</span><span>Last activity</span><span>Data</span><span>Total</span><span>Actions</span></div>
             {data.books.map((book) => <div className="admin-row" key={book.id}>
-              <span><b>{book.name}</b><small>{book.id}</small></span>
+              <span><b title={book.name}>{book.name}</b><small>{book.id}</small></span>
               <span>{ageDays(book.lastActivityAt)} days ago<small>{book.lastActivityAt}</small></span>
               <span>{book.membersCount} members · {book.expensesCount} expenses · {book.settlementsCount} payments</span>
               <span>{money(book.totalSpent, book.currency)}</span>
-              <button className="danger" type="button" disabled={busy} onClick={() => removeBook(book)}>Delete</button>
+              <span className="admin-actions"><button className="secondary" type="button" disabled={busy} onClick={() => copyInvite(book)}>{copiedBook === book.id ? "Copied" : "Copy link"}</button><button className="danger" type="button" disabled={busy} onClick={() => removeBook(book)}>Delete</button></span>
             </div>)}
           </div>
         </section>
