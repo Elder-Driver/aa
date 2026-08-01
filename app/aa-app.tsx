@@ -10,6 +10,7 @@ type Expense = { id: string; title: string; amount: number; paidBy: string; crea
 type Settlement = { id: string; fromMemberId: string; toMemberId: string; amount: number; createdAt: string };
 type Snapshot = { book: { id: string; name: string; currency: string; createdAt: string }; members: Member[]; expenses: Expense[]; settlements: Settlement[]; totalSpent: number; suggestions: Array<{ fromMemberId: string; toMemberId: string; amount: number }> };
 type Identity = { memberToken: string; memberId: string; adminToken?: string };
+type RecentBook = { invite: string; name: string; currency: string; memberName: string; updatedAt: number; identity: Identity };
 type Tab = "home" | "expenses" | "members" | "settle";
 
 const copy = {
@@ -191,6 +192,7 @@ const currencyOptions = [
 ];
 const zeroDecimal = new Set(["JPY", "KRW"]);
 const langKey = "splitpack:lang";
+const recentKey = "splitpack:recent";
 const today = () => new Date().toISOString().slice(0, 10);
 const sessionKey = (invite: string) => `splitpack:${invite}`;
 
@@ -222,6 +224,21 @@ async function readError(response: Response, fallback: string) {
   return data.error || fallback;
 }
 
+function readRecentBooks() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(recentKey) || "[]") as RecentBook[];
+    return parsed.filter((item) => item.invite && item.identity?.memberToken && item.identity?.memberId).slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentBook(item: RecentBook) {
+  const next = [item, ...readRecentBooks().filter((book) => book.invite !== item.invite)].slice(0, 8);
+  localStorage.setItem(recentKey, JSON.stringify(next));
+  return next;
+}
+
 export function AAApp() {
   const [lang, setLang] = useState<Lang>("zh");
   const t = copy[lang];
@@ -234,6 +251,7 @@ export function AAApp() {
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [recentBooks, setRecentBooks] = useState<RecentBook[]>([]);
 
   useEffect(() => {
     const storedLang = localStorage.getItem(langKey);
@@ -250,6 +268,7 @@ export function AAApp() {
       params.delete("memberId");
       history.replaceState(null, "", params.toString() ? `/?${params.toString()}` : "/");
     }
+    setRecentBooks(readRecentBooks());
     setInvite(foundInvite);
     if (foundInvite) {
       try { setIdentity(JSON.parse(localStorage.getItem(sessionKey(foundInvite)) || "null")); } catch { setIdentity(null); }
@@ -281,6 +300,21 @@ export function AAApp() {
     if (invite) void load();
   }, [invite, load]);
 
+  useEffect(() => {
+    if (!invite || !identity || !data) return;
+    const member = data.members.find((item) => item.id === identity.memberId);
+    // Persist the current book into this browser's local recent list.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecentBooks(writeRecentBook({
+      invite,
+      identity,
+      name: data.book.name,
+      currency: data.book.currency,
+      memberName: member?.name || "",
+      updatedAt: Date.now(),
+    }));
+  }, [data, identity, invite]);
+
   const authedFetch = useCallback((url: string, init: RequestInit = {}) => fetch(url, {
     ...init,
     headers: {
@@ -300,8 +334,15 @@ export function AAApp() {
     void load(nextInvite);
   }
 
+  function forgetRecentBook(targetInvite: string) {
+    const next = readRecentBooks().filter((book) => book.invite !== targetInvite);
+    localStorage.setItem(recentKey, JSON.stringify(next));
+    localStorage.removeItem(sessionKey(targetInvite));
+    setRecentBooks(next);
+  }
+
   if (loading) return <LoadingScreen text={t.loading} />;
-  if (!invite) return <Landing lang={lang} t={t} onLang={switchLang} onCreated={enterBook} />;
+  if (!invite) return <Landing lang={lang} t={t} recentBooks={recentBooks} onLang={switchLang} onCreated={enterBook} onOpenRecent={(book) => enterBook(book.invite, book.identity)} onForgetRecent={forgetRecentBook} />;
   if (error && !data) return <MessageScreen title={t.cannotOpen} detail={error} action={t.backHome} onAction={() => { history.replaceState(null, "", "/"); setInvite(""); setError(""); }} />;
   if (!data) return <LoadingScreen text={t.loading} />;
   if (!identity) return <Join lang={lang} t={t} book={data.book} invite={invite} onLang={switchLang} onJoined={(next) => enterBook(invite, next)} />;
@@ -362,7 +403,7 @@ export function AAApp() {
   );
 }
 
-function Landing({ lang, t, onLang, onCreated }: { lang: Lang; t: Text; onLang: () => void; onCreated: (invite: string, identity: Identity) => void }) {
+function Landing({ lang, t, recentBooks, onLang, onCreated, onOpenRecent, onForgetRecent }: { lang: Lang; t: Text; recentBooks: RecentBook[]; onLang: () => void; onCreated: (invite: string, identity: Identity) => void; onOpenRecent: (book: RecentBook) => void; onForgetRecent: (invite: string) => void }) {
   const [name, setName] = useState("");
   const [nickname, setNickname] = useState("");
   const [currency, setCurrency] = useState("USD");
@@ -394,6 +435,18 @@ function Landing({ lang, t, onLang, onCreated }: { lang: Lang; t: Text; onLang: 
           <p className="eyebrow">{t.tagline}</p>
           <h1>{t.createBook}</h1>
           <p>{t.openInvite}</p>
+          {recentBooks.length > 0 && <div className="recent-books">
+            <h2>{lang === "zh" ? "最近账本" : "Recent trips"}</h2>
+            <div className="recent-list">
+              {recentBooks.map((book) => <article key={book.invite}>
+                <button type="button" className="recent-main" onClick={() => onOpenRecent(book)}>
+                  <span className="avatar small">{initials(book.name)}</span>
+                  <span><b>{book.name}</b><small>{book.memberName || book.currency} · {new Date(book.updatedAt).toLocaleDateString()}</small></span>
+                </button>
+                <button type="button" className="recent-forget" onClick={() => onForgetRecent(book.invite)} aria-label={lang === "zh" ? "移除最近账本" : "Remove recent trip"}>×</button>
+              </article>)}
+            </div>
+          </div>}
         </div>
         <form className="create-card" onSubmit={submit}>
           <label>{t.bookName}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.bookPlaceholder} maxLength={40} required /></label>
