@@ -263,11 +263,11 @@ export function AAApp() {
     return next;
   });
 
-  const load = useCallback(async () => {
-    if (!invite) return;
+  const load = useCallback(async (targetInvite = invite) => {
+    if (!targetInvite) return;
     try {
       setError("");
-      const response = await fetch(`/api/books/${encodeURIComponent(invite)}`, { cache: "no-store" });
+      const response = await fetch(`/api/books/${encodeURIComponent(targetInvite)}`, { cache: "no-store" });
       if (!response.ok) throw new Error(await readError(response, t.networkError));
       setData(await response.json());
     } catch (err) {
@@ -297,6 +297,7 @@ export function AAApp() {
     setIdentity(nextIdentity);
     setData(null);
     history.replaceState(null, "", `/?book=${encodeURIComponent(nextInvite)}`);
+    void load(nextInvite);
   }
 
   if (loading) return <LoadingScreen text={t.loading} />;
