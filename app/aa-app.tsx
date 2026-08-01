@@ -4,10 +4,10 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { splitEqually } from "../lib/calculations";
 
 type Lang = "zh" | "en";
-type Member = { id: string; name: string; isCreator: boolean; inactive: boolean; paid: number; owed: number; sent: number; received: number; balance: number };
+type Member = { id: string; name: string; isCreator: boolean; inactive: boolean; paymentMethod?: string | null; paymentAccount?: string | null; paid: number; owed: number; sent: number; received: number; balance: number };
 type ExpenseShare = { id: string; expenseId: string; memberId: string; amount: number };
 type Expense = { id: string; title: string; amount: number; paidBy: string; createdBy: string; expenseDate: string; createdAt: string; shares: ExpenseShare[] };
-type Settlement = { id: string; fromMemberId: string; toMemberId: string; amount: number; createdAt: string };
+type Settlement = { id: string; fromMemberId: string; toMemberId: string; amount: number; method?: string | null; createdBy: string; createdAt: string };
 type Snapshot = { book: { id: string; name: string; currency: string; createdAt: string }; members: Member[]; expenses: Expense[]; settlements: Settlement[]; totalSpent: number; suggestions: Array<{ fromMemberId: string; toMemberId: string; amount: number }> };
 type Identity = { memberToken: string; memberId: string; adminToken?: string };
 type RecentBook = { invite: string; name: string; currency: string; memberName: string; updatedAt: number; identity: Identity };
@@ -72,6 +72,11 @@ const copy = {
     settlements: "最少转账建议",
     settleHint: "按最终净额合并后，转账次数会更少。",
     markPaid: "标记已转",
+    paymentProfile: "我的收款方式",
+    paymentProfileHint: "只在别人需要转账给你时显示。",
+    paymentMethod: "方式",
+    paymentAccount: "账号 / 备注",
+    noPaymentAccount: "还没写收款方式",
     allClear: "已经结清",
     allClearHint: "当前没有人需要转账。",
     history: "已记录还款",
@@ -157,6 +162,11 @@ const copy = {
     settlements: "Fewest transfers",
     settleHint: "Balances are merged first, so fewer people need to send money.",
     markPaid: "Mark paid",
+    paymentProfile: "My payment info",
+    paymentProfileHint: "Shown only when someone needs to pay you.",
+    paymentMethod: "Method",
+    paymentAccount: "Account / note",
+    noPaymentAccount: "No payment info yet",
     allClear: "All settled",
     allClearHint: "No one needs to transfer money right now.",
     history: "Recorded payments",
@@ -198,6 +208,26 @@ const recentKey = "splitpack:recent";
 const today = () => new Date().toISOString().slice(0, 10);
 const sessionKey = (invite: string) => `splitpack:${invite}`;
 const bookPath = (invite: string) => `/b/${encodeURIComponent(invite)}`;
+const toDateValue = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const parseDateValue = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year || new Date().getFullYear(), (month || 1) - 1, day || 1);
+};
+const monthLabel = (value: Date) => value.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+function isEqualSplitExpense(expense: Expense | null) {
+  if (!expense || !expense.shares.length) return false;
+  const ids = expense.shares.map((share) => share.memberId);
+  const expected = splitEqually(expense.amount, ids);
+  return expected.every((share) => expense.shares.some((item) => item.memberId === share.memberId && item.amount === share.amount));
+}
+
+function membersWithMeFirst(members: Member[], memberId?: string) {
+  return [...members].sort((a, b) => {
+    if (a.id === memberId) return -1;
+    if (b.id === memberId) return 1;
+    return 0;
+  });
+}
 
 function minorFromInput(value: string, currency: string) {
   const amount = Number(value);
@@ -294,17 +324,23 @@ export function AAApp() {
     return next;
   });
 
-  const load = useCallback(async (targetInvite = invite) => {
+  const load = useCallback(async (targetInvite = invite, targetIdentity = identity) => {
     if (!targetInvite) return;
     try {
       setError("");
-      const response = await fetch(`/api/books/${encodeURIComponent(targetInvite)}`, { cache: "no-store" });
+      const response = await fetch(`/api/books/${encodeURIComponent(targetInvite)}`, {
+        cache: "no-store",
+        headers: {
+          "x-member-token": targetIdentity?.memberToken || "",
+          "x-admin-token": targetIdentity?.adminToken || "",
+        },
+      });
       if (!response.ok) throw new Error(await readError(response, t.networkError));
       setData(await response.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : t.networkError);
     }
-  }, [invite, t.networkError]);
+  }, [identity, invite, t.networkError]);
 
   useEffect(() => {
     // Refresh server-backed book data when the active invite changes.
@@ -343,7 +379,7 @@ export function AAApp() {
     setIdentity(nextIdentity);
     setData(null);
     history.replaceState(null, "", bookPath(nextInvite));
-    void load(nextInvite);
+    void load(nextInvite, nextIdentity);
   }
 
   function goHome() {
@@ -387,7 +423,7 @@ export function AAApp() {
       <section className="book-heading">
         <div>
           <p className="eyebrow">{t.travelBook}</p>
-          <h1 className="book-title"><span>{data.book.name}</span></h1>
+          <h1 className="book-title" title={data.book.name}><span>{data.book.name}</span></h1>
           <p className="book-meta">{activeCount} {t.membersCount} · {data.book.currency}</p>
         </div>
         <div className="user-chip"><span className="avatar small">{initials(me?.name || t.currentUser)}</span><span>{me?.name || t.currentUser}</span></div>
@@ -405,10 +441,10 @@ export function AAApp() {
         ))}
       </nav>
 
-      {tab === "home" && <Overview t={t} data={data} memberName={memberName} onAdd={() => { setSelectedExpense(null); setExpenseOpen(true); }} onExpense={(expense) => { setSelectedExpense(expense); setExpenseOpen(true); }} onSettle={() => setTab("settle")} />}
+      {tab === "home" && <Overview t={t} data={data} currentMemberId={identity.memberId} memberName={memberName} onAdd={() => { setSelectedExpense(null); setExpenseOpen(true); }} onExpense={(expense) => { setSelectedExpense(expense); setExpenseOpen(true); }} onSettle={() => setTab("settle")} />}
       {tab === "expenses" && <ExpenseList t={t} data={data} memberName={memberName} onAdd={() => { setSelectedExpense(null); setExpenseOpen(true); }} onExpense={(expense) => { setSelectedExpense(expense); setExpenseOpen(true); }} />}
-      {tab === "members" && <Members t={t} data={data} identity={identity} invite={invite} authedFetch={authedFetch} onChanged={load} />}
-      {tab === "settle" && <Settle t={t} data={data} memberName={memberName} authedFetch={authedFetch} invite={invite} onChanged={load} />}
+      {tab === "members" && <Members key={identity.memberId} t={t} data={data} identity={identity} invite={invite} authedFetch={authedFetch} onChanged={load} />}
+      {tab === "settle" && <SettlePanel t={t} data={data} identity={identity} memberName={memberName} authedFetch={authedFetch} invite={invite} onChanged={load} />}
 
       <button className="fab" onClick={() => { setSelectedExpense(null); setExpenseOpen(true); }}>+ {t.addExpense}</button>
 
@@ -505,7 +541,7 @@ function Join({ lang, t, book, invite, onLang, onJoined }: { lang: Lang; t: Text
       <div className="join-card">
         <BrandMark big />
         <p className="eyebrow">{t.joinTitle}</p>
-        <h1 className="book-title"><span>{book.name}</span></h1>
+        <h1 className="book-title" title={book.name}><span>{book.name}</span></h1>
         <form onSubmit={submit}>
           <label>{t.nickname}<input autoFocus value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={t.nicknamePlaceholder} maxLength={24} required /></label>
           {error && <p className="form-error">{error}</p>}
@@ -520,7 +556,7 @@ function StatCard({ label, value, tone, prefix }: { label: string; value: string
   return <article className="stat-card"><span>{label}</span><strong className={tone || ""}>{prefix ? `${prefix} ` : ""}{value}</strong></article>;
 }
 
-function Overview({ t, data, memberName, onAdd, onExpense, onSettle }: { t: Text; data: Snapshot; memberName: (id: string) => string; onAdd: () => void; onExpense: (expense: Expense) => void; onSettle: () => void }) {
+function Overview({ t, data, currentMemberId, memberName, onAdd, onExpense, onSettle }: { t: Text; data: Snapshot; currentMemberId: string; memberName: (id: string) => string; onAdd: () => void; onExpense: (expense: Expense) => void; onSettle: () => void }) {
   return (
     <section className="content overview-grid">
       <div className="main-column">
@@ -529,7 +565,7 @@ function Overview({ t, data, memberName, onAdd, onExpense, onSettle }: { t: Text
       </div>
       <aside>
         <SectionTitle title={t.balances} />
-        <div className="balance-card">{data.members.filter((m) => !m.inactive).map((member) => <BalanceRow key={member.id} t={t} member={member} currency={data.book.currency} />)}<button className="soft-button" onClick={onSettle}>{t.viewSettle}</button></div>
+        <div className="balance-card">{membersWithMeFirst(data.members.filter((m) => !m.inactive), currentMemberId).map((member) => <BalanceRow key={member.id} t={t} member={member} currency={data.book.currency} />)}<button className="soft-button" onClick={onSettle}>{t.viewSettle}</button></div>
       </aside>
     </section>
   );
@@ -578,6 +614,21 @@ function BalanceRow({ t, member, currency }: { t: Text; member: Member; currency
 
 function Members({ t, data, identity, invite, authedFetch, onChanged }: { t: Text; data: Snapshot; identity: Identity; invite: string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; onChanged: () => Promise<void> }) {
   const [message, setMessage] = useState("");
+  const me = data.members.find((member) => member.id === identity.memberId);
+  const [paymentMethod, setPaymentMethod] = useState(me?.paymentMethod || "zelle");
+  const [paymentAccount, setPaymentAccount] = useState(me?.paymentAccount || "");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const sortedMembers = membersWithMeFirst(data.members, identity.memberId);
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!me) return;
+    setSavingProfile(true);
+    const response = await authedFetch(`/api/books/${invite}/members/${me.id}`, { method: "PATCH", body: JSON.stringify({ action: "profile", paymentMethod, paymentAccount }) });
+    setSavingProfile(false);
+    if (!response.ok) { setMessage(await readError(response, t.networkError)); return; }
+    await onChanged();
+    setMessage(t.copied);
+  }
   async function action(member: Member, type: "deactivate" | "reactivate" | "regenerate") {
     const response = await authedFetch(`/api/books/${invite}/members/${member.id}`, { method: "PATCH", body: JSON.stringify({ action: type }) });
     if (!response.ok) { setMessage(await readError(response, t.networkError)); return; }
@@ -594,7 +645,13 @@ function Members({ t, data, identity, invite, authedFetch, onChanged }: { t: Tex
   return (
     <section className="content single">
       <div className="section-head"><h2>{t.members}</h2><span className="count-badge">{data.members.filter((m) => !m.inactive).length}</span></div>
-      <div className="member-grid">{data.members.map((member) => <article className={`member-card ${member.inactive ? "muted" : ""}`} key={member.id}>
+      {me && <form className="payment-profile" onSubmit={saveProfile}>
+        <div><h3>{t.paymentProfile}</h3><p>{t.paymentProfileHint}</p></div>
+        <label>{t.paymentMethod}<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>{paymentMethods.map((method) => <option value={method.id} key={method.id}>{method.label}</option>)}</select></label>
+        <label>{t.paymentAccount}<input value={paymentAccount} onChange={(event) => setPaymentAccount(event.target.value)} placeholder="@name / phone / email" maxLength={80} /></label>
+        <button className="primary" disabled={savingProfile}>{savingProfile ? t.saving : t.save}</button>
+      </form>}
+      <div className="member-grid">{sortedMembers.map((member) => <article className={`member-card ${member.inactive ? "muted" : ""}`} key={member.id}>
         <div className="member-top"><span className="avatar large-avatar">{initials(member.name)}</span><div><h3>{member.name}{member.id === identity.memberId && <em>{t.currentUser}</em>}</h3><p>{member.isCreator ? t.creator : member.inactive ? t.inactive : t.member}</p></div></div>
         <div className="mini-stats"><span>{t.paid}<b>{money(member.paid, data.book.currency)}</b></span><span>{t.owed}<b>{money(member.owed, data.book.currency)}</b></span></div>
         <div className={`net ${member.balance >= 0 ? "positive" : "negative"}`}><span>{t.net}</span><b>{signedMoney(member.balance, data.book.currency)}</b></div>
@@ -605,6 +662,7 @@ function Members({ t, data, identity, invite, authedFetch, onChanged }: { t: Tex
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function Settle({ t, data, memberName, authedFetch, invite, onChanged }: { t: Text; data: Snapshot; memberName: (id: string) => string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; invite: string; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -632,6 +690,60 @@ function Settle({ t, data, memberName, authedFetch, invite, onChanged }: { t: Te
   );
 }
 
+const paymentMethods = [
+  { id: "zelle", label: "Zelle", icon: "Z" },
+  { id: "venmo", label: "Venmo", icon: "V" },
+  { id: "apple-cash", label: "Apple Cash", icon: "" },
+  { id: "cash", label: "Cash", icon: "$" },
+  { id: "other", label: "Other", icon: "…" },
+] as const;
+
+function SettlePanel({ t, data, identity, memberName, authedFetch, invite, onChanged }: { t: Text; data: Snapshot; identity: Identity; memberName: (id: string) => string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; invite: string; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [methods, setMethods] = useState<Record<string, string>>({});
+  const memberById = (id: string) => data.members.find((member) => member.id === id);
+  const methodMeta = (id?: string | null) => paymentMethods.find((item) => item.id === id) || paymentMethods[paymentMethods.length - 1];
+  async function settle(item: Snapshot["suggestions"][number]) {
+    const key = `${item.fromMemberId}-${item.toMemberId}`;
+    const recipient = memberById(item.toMemberId);
+    const fallbackMethod = recipient?.paymentMethod || "zelle";
+    setBusy(key);
+    setError("");
+    const response = await authedFetch(`/api/books/${invite}/settlements`, { method: "POST", body: JSON.stringify({ ...item, method: methods[key] || fallbackMethod }) });
+    if (!response.ok) setError(await readError(response, t.networkError)); else await onChanged();
+    setBusy("");
+  }
+  async function undo(item: Settlement) {
+    setBusy(item.id);
+    setError("");
+    const response = await authedFetch(`/api/books/${invite}/settlements`, { method: "DELETE", body: JSON.stringify({ settlementId: item.id }) });
+    if (!response.ok) setError(await readError(response, t.networkError)); else await onChanged();
+    setBusy("");
+  }
+  return (
+    <section className="content settle-layout">
+      <div>
+        <h2>{t.settle}</h2>
+        {data.suggestions.length ? <div className="settlement-list">{data.suggestions.map((item) => {
+          const key = `${item.fromMemberId}-${item.toMemberId}`;
+          const recipient = memberById(item.toMemberId);
+          const selectedMethod = methods[key] || recipient?.paymentMethod || "zelle";
+          const selectedMeta = methodMeta(selectedMethod);
+          const paymentLine = recipient?.paymentMethod || recipient?.paymentAccount ? `${selectedMeta.label}${recipient?.paymentAccount ? ` · ${recipient.paymentAccount}` : ""}` : t.noPaymentAccount;
+          return <article className="settle-row" key={key}><span className="avatar">{initials(memberName(item.fromMemberId))}</span><div className="settle-main"><p><b>{memberName(item.fromMemberId)}</b><span>→</span><b>{memberName(item.toMemberId)}</b></p><strong>{money(item.amount, data.book.currency)}</strong><small className="payment-note"><i className="method-icon">{selectedMeta.icon}</i>{paymentLine}</small><div className="method-pills">{paymentMethods.map((method) => <button type="button" key={method.id} className={selectedMethod === method.id ? "active" : ""} onClick={() => setMethods((current) => ({ ...current, [key]: method.id }))}><i>{method.icon}</i>{method.label}</button>)}</div></div><button disabled={busy === key} onClick={() => settle(item)}>{t.markPaid}</button></article>;
+        })}</div> : <div className="all-clear compact"><h3>{t.allClear}</h3><p>{t.allClearHint}</p></div>}
+        {error && <p className="form-error">{error}</p>}
+      </div>
+      {data.settlements.length > 0 && <div className="history"><SectionTitle title={t.history} />{data.settlements.map((item) => {
+        const method = methodMeta(item.method);
+        const canUndo = item.createdBy === identity.memberId || Boolean(identity.adminToken);
+        return <p key={item.id} className="history-row"><span><i className="method-icon">{method.icon}</i>{memberName(item.fromMemberId)} → {memberName(item.toMemberId)}<small>{method.label}</small></span><b>{money(item.amount, data.book.currency)}</b>{canUndo && <button type="button" disabled={busy === item.id} onClick={() => undo(item)}>{t.cancel}</button>}</p>;
+      })}</div>}
+    </section>
+  );
+}
+
 function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, authedFetch, onClose, onChanged }: { t: Text; data: Snapshot; expense: Expense | null; currentMemberId: string; editable: boolean; invite: string; authedFetch: (url: string, init?: RequestInit) => Promise<Response>; onClose: () => void; onChanged: () => Promise<void> }) {
   const activeMembers = data.members.filter((member) => !member.inactive);
   const [title, setTitle] = useState(expense?.title || "");
@@ -639,12 +751,17 @@ function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, aut
   const defaultPaidBy = activeMembers.some((member) => member.id === currentMemberId) ? currentMemberId : activeMembers[0]?.id || "";
   const [paidBy, setPaidBy] = useState(expense?.paidBy || defaultPaidBy);
   const [date, setDate] = useState(expense?.expenseDate || today());
-  const [mode, setMode] = useState<"equal" | "custom">(expense ? "custom" : "equal");
+  const [mode, setMode] = useState<"equal" | "custom">(expense && !isEqualSplitExpense(expense) ? "custom" : "equal");
   const [selected, setSelected] = useState<string[]>(expense ? expense.shares.map((share) => share.memberId) : activeMembers.map((member) => member.id));
   const [custom, setCustom] = useState<Record<string, string>>(() => Object.fromEntries(expense?.shares.map((share) => [share.memberId, inputFromMinor(share.amount, data.book.currency)]) || []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const total = minorFromInput(amountInput, data.book.currency);
+  const equalCustom = useCallback((ids: string[], nextTotal = total) => Object.fromEntries(splitEqually(nextTotal, ids).map((share) => [share.memberId, inputFromMinor(share.amount, data.book.currency)])), [data.book.currency, total]);
+  const customMatchesEqual = useCallback((ids: string[], nextTotal = total) => {
+    const expected = equalCustom(ids, nextTotal);
+    return ids.every((id) => (custom[id] || "") === (expected[id] || ""));
+  }, [custom, equalCustom, total]);
   const computedShares = useMemo(() => {
     if (!selected.length) return [];
     if (mode === "custom") return selected.map((id) => ({ memberId: id, amount: minorFromInput(custom[id] || "", data.book.currency) }));
@@ -653,7 +770,17 @@ function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, aut
   const shareTotal = computedShares.reduce((sum, share) => sum + share.amount, 0);
   function toggle(id: string) {
     if (!editable) return;
-    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setSelected((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      if (mode === "custom" && customMatchesEqual(current)) setCustom(equalCustom(next));
+      return next;
+    });
+  }
+  function switchMode(nextMode: "equal" | "custom") {
+    setMode(nextMode);
+    if (nextMode === "custom") {
+      setCustom(equalCustom(selected));
+    }
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -681,9 +808,12 @@ function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, aut
         {!editable && <div className="notice">{t.readonly}</div>}
         <fieldset disabled={!editable || busy}>
           <label>{t.expenseTitle}<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} required /></label>
-          <div className="form-row"><label>{t.amount}<div className="money-input"><span>{data.book.currency}</span><input inputMode="decimal" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} placeholder="0.00" required /></div></label><label>{t.date}<input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label></div>
+          <div className="form-row"><label>{t.amount}<div className="money-input"><span>{data.book.currency}</span><input inputMode="decimal" value={amountInput} onChange={(e) => {
+            setAmountInput(e.target.value);
+            if (mode === "custom" && customMatchesEqual(selected)) setCustom(equalCustom(selected, minorFromInput(e.target.value, data.book.currency)));
+          }} placeholder="0.00" required /></div></label><DateField t={t} value={date} onChange={setDate} disabled={!editable || busy} /></div>
           <label>{t.payer}<select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>{activeMembers.map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
-          <div className="split-heading"><span>{t.participants}</span><div className="segmented"><button type="button" className={mode === "equal" ? "active" : ""} onClick={() => setMode("equal")}>{t.equal}</button><button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>{t.custom}</button></div></div>
+          <div className="split-heading"><span>{t.participants}</span><div className="segmented"><button type="button" className={mode === "equal" ? "active" : ""} onClick={() => switchMode("equal")}>{t.equal}</button><button type="button" className={mode === "custom" ? "active" : ""} onClick={() => switchMode("custom")}>{t.custom}</button></div></div>
           <div className="participant-list">{activeMembers.map((member) => {
             const isSelected = selected.includes(member.id);
             const share = computedShares.find((item) => item.memberId === member.id)?.amount || 0;
@@ -695,6 +825,51 @@ function ExpenseModal({ t, data, expense, currentMemberId, editable, invite, aut
         <div className="modal-actions">{expense && editable && <button type="button" className="danger" onClick={remove} disabled={busy}>{t.delete}</button>}<span /><button type="button" className="secondary" onClick={onClose}>{t.cancel}</button>{editable && <button className="primary" disabled={busy}>{busy ? t.saving : t.save}</button>}</div>
       </form>
     </Modal>
+  );
+}
+
+function DateField({ t, value, onChange, disabled }: { t: Text; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => parseDateValue(value));
+  const selectedDate = parseDateValue(value);
+  const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - firstDay.getDay());
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+  const isChinese = t.language === "English";
+  function choose(day: Date) {
+    onChange(toDateValue(day));
+    setViewDate(day);
+    setOpen(false);
+  }
+  function moveMonth(delta: number) {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1));
+  }
+  return (
+    <label className="date-field">{t.date}
+      <button type="button" className="date-trigger" disabled={disabled} onClick={() => setOpen((current) => !current)}>
+        <span>{value}</span><span aria-hidden="true">⌄</span>
+      </button>
+      {open && <div className="date-popover">
+        <div className="date-popover-head">
+          <button type="button" onClick={() => moveMonth(-1)} aria-label="Previous month">‹</button>
+          <strong>{monthLabel(viewDate)}</strong>
+          <button type="button" onClick={() => moveMonth(1)} aria-label="Next month">›</button>
+        </div>
+        <div className="date-weekdays">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day}>{day}</span>)}</div>
+        <div className="date-grid">{days.map((day) => {
+          const dateValue = toDateValue(day);
+          const muted = day.getMonth() !== viewDate.getMonth();
+          const selected = dateValue === toDateValue(selectedDate);
+          return <button type="button" key={dateValue} className={`${muted ? "muted" : ""} ${selected ? "selected" : ""}`} onClick={() => choose(day)}>{day.getDate()}</button>;
+        })}</div>
+        <button type="button" className="date-today" onClick={() => choose(new Date())}>{isChinese ? "今天" : "Today"}</button>
+      </div>}
+    </label>
   );
 }
 

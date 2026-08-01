@@ -59,7 +59,7 @@ export function validateAmount(value: unknown) {
   return result;
 }
 
-export async function snapshot(bookId: string) {
+export async function snapshot(bookId: string, viewerId?: string, isAdmin = false) {
   const db = getDb();
   const [bookRows, memberRows, expenseRows, settlementRows] = await Promise.all([
     db.select({ id: books.id, name: books.name, currency: books.currency, createdAt: books.createdAt }).from(books).where(eq(books.id, bookId)),
@@ -76,12 +76,23 @@ export async function snapshot(bookId: string) {
     stats.get(item.fromMemberId)!.sent += item.amount;
     stats.get(item.toMemberId)!.received += item.amount;
   }
-  const memberView = memberRows.map((member) => {
+  const rawMemberView = memberRows.map((member) => {
     const stat = stats.get(member.id)!;
     return { ...member, ...stat, balance: stat.paid - stat.owed + stat.sent - stat.received, authTokenHash: undefined };
   });
   const expenseView = expenseRows.map((expense) => ({ ...expense, shares: shareRows.filter((share) => share.expenseId === expense.id) }));
-  const suggestions = minimalTransfers(memberView.map((member) => ({ id: member.id, balance: member.balance })));
+  const suggestions = minimalTransfers(rawMemberView.map((member) => ({ id: member.id, balance: member.balance })));
+  const visiblePaymentMembers = new Set<string>();
+  if (viewerId) visiblePaymentMembers.add(viewerId);
+  if (viewerId) suggestions.filter((item) => item.fromMemberId === viewerId).forEach((item) => visiblePaymentMembers.add(item.toMemberId));
+  const memberView = rawMemberView.map((member) => {
+    const canSeePayment = isAdmin || visiblePaymentMembers.has(member.id);
+    return {
+      ...member,
+      paymentMethod: canSeePayment ? member.paymentMethod : null,
+      paymentAccount: canSeePayment ? member.paymentAccount : null,
+    };
+  });
   return {
     book: bookRows[0], members: memberView, expenses: expenseView, settlements: settlementRows,
     totalSpent: expenseRows.reduce((sum, item) => sum + item.amount, 0), suggestions,

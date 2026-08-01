@@ -15,6 +15,8 @@ export const members = sqliteTable("members", {
   bookId: text("book_id").notNull().references(() => books.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   authTokenHash: text("auth_token_hash").notNull(),
+  paymentMethod: text("payment_method"),
+  paymentAccount: text("payment_account"),
   isCreator: integer("is_creator", { mode: "boolean" }).notNull().default(false),
   inactive: integer("inactive", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -51,6 +53,7 @@ export const settlements = sqliteTable("settlements", {
   fromMemberId: text("from_member_id").notNull().references(() => members.id),
   toMemberId: text("to_member_id").notNull().references(() => members.id),
   amount: integer("amount").notNull(),
+  method: text("method"),
   createdBy: text("created_by").notNull().references(() => members.id),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("settlements_book_idx").on(table.bookId)]);
