@@ -6,5 +6,13 @@
   "display": "standalone",
   "background_color": "#f6f4ef",
   "theme_color": "#f6f4ef",
-  "lang": "en"
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/aa-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

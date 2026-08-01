@@ -39,8 +39,8 @@ Recommended settings:
 - Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
 - Node version: `22` or newer
 
-Create a Cloudflare D1 database first, then add these environment variables in
-the Worker Git deployment settings:
+Create a Cloudflare D1 database first, then add these encrypted environment
+variables in the Worker Git deployment settings:
 
 ```text
 D1_DATABASE_NAME=aa-db
@@ -51,6 +51,9 @@ ADMIN_KEY=<a private admin password>
 The D1 binding name used by the app is `DB`. The build reads the real database
 ID from `D1_DATABASE_ID` and writes it into the generated Wrangler deploy
 configuration.
+
+`ADMIN_KEY` is also read during the Git build and copied into the generated
+Worker runtime configuration so `/admin` can verify the password after deploy.
 
 Database schema changes live in `drizzle/`. Commit migrations before deploying
 schema changes.

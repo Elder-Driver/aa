@@ -16,6 +16,7 @@ type Tab = "home" | "expenses" | "members" | "settle";
 const copy = {
   zh: {
     appName: "AA",
+    brandText: ".aaa.codes",
     tagline: "旅行分账，不绕弯",
     createBook: "新建账本",
     bookName: "账本名称",
@@ -100,6 +101,7 @@ const copy = {
   },
   en: {
     appName: "AA",
+    brandText: ".aaa.codes",
     tagline: "Split trips without the spreadsheet",
     createBook: "New trip",
     bookName: "Trip name",
@@ -375,7 +377,7 @@ export function AAApp() {
   return (
     <main className="app-shell" lang={lang === "zh" ? "zh-CN" : "en"}>
       <header className="topbar">
-        <button className="brand" onClick={goHome} aria-label={t.appName}><span className="brand-mark logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><span>{t.appName}</span></button>
+        <button className="brand" onClick={goHome} aria-label={`${t.appName} home`}><BrandMark /><span>{t.brandText}</span></button>
         <div className="top-actions">
           <button className="ghost-button" onClick={switchLang}>{t.language}</button>
           <button className="share-button" onClick={() => setShareOpen(true)}>↗ {t.inviteFriends}</button>
@@ -446,7 +448,7 @@ function Landing({ lang, t, recentBooks, onLang, onCreated, onOpenRecent, onForg
   return (
     <main className="landing" lang={lang === "zh" ? "zh-CN" : "en"}>
       <header className="landing-nav">
-        <div className="brand"><span className="brand-mark logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><span>{t.appName}</span></div>
+        <div className="brand"><BrandMark /><span>{t.brandText}</span></div>
         <button className="ghost-button" onClick={onLang}>{t.language}</button>
       </header>
       <section className="landing-panel">
@@ -501,7 +503,7 @@ function Join({ lang, t, book, invite, onLang, onJoined }: { lang: Lang; t: Text
     <main className="center-screen" lang={lang === "zh" ? "zh-CN" : "en"}>
       <button className="floating-lang" onClick={onLang}>{t.language}</button>
       <div className="join-card">
-        <span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span>
+        <BrandMark big />
         <p className="eyebrow">{t.joinTitle}</p>
         <h1>{book.name}</h1>
         <form onSubmit={submit}>
@@ -744,11 +746,15 @@ function Empty({ title, detail, action, onAction }: { title: string; detail: str
 }
 
 function LoadingScreen({ text }: { text: string }) {
-  return <main className="center-screen"><div className="loader"><span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><p>{text}</p></div></main>;
+  return <main className="center-screen"><div className="loader"><BrandMark big /><p>{text}</p></div></main>;
 }
 
 function MessageScreen({ title, detail, action, onAction }: { title: string; detail: string; action: string; onAction: () => void }) {
-  return <main className="center-screen"><div className="join-card"><span className="brand-mark big logo-aa" aria-hidden="true"><span>A</span><i /><span>A</span></span><h1>{title}</h1><p>{detail}</p><button className="primary large" onClick={onAction}>{action}</button></div></main>;
+  return <main className="center-screen"><div className="join-card"><BrandMark big /><h1>{title}</h1><p>{detail}</p><button className="primary large" onClick={onAction}>{action}</button></div></main>;
+}
+
+function BrandMark({ big = false }: { big?: boolean }) {
+  return <span className={`brand-mark${big ? " big" : ""}`} aria-hidden="true" />;
 }
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
