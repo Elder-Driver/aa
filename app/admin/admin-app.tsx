@@ -41,6 +41,7 @@ export function AdminApp() {
   const [days, setDays] = useState(30);
   const [copiedBook, setCopiedBook] = useState("");
   const triedStoredKey = useRef(false);
+  const keyInputRef = useRef<HTMLInputElement>(null);
 
   const staleEmpty = useMemo(() => data?.books.filter((book) => book.expensesCount === 0 && book.settlementsCount === 0 && ageDays(book.createdAt) >= days) ?? [], [data, days]);
 
@@ -69,7 +70,14 @@ export function AdminApp() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await load(key);
+    const form = event.currentTarget as HTMLFormElement;
+    const submittedKey = String(new FormData(form).get("adminKey") || keyInputRef.current?.value || key).trim();
+    if (!submittedKey) {
+      setError("Enter the admin key first");
+      return;
+    }
+    setKey(submittedKey);
+    await load(submittedKey);
   }
 
   async function cleanup() {
@@ -129,8 +137,8 @@ export function AdminApp() {
       </header>
 
       {!data ? <form className="admin-key-card" onSubmit={submit}>
-        <label>Admin key<input value={key} onChange={(event) => setKey(event.target.value)} placeholder="ADMIN_KEY" type="password" /></label>
-        <button className="primary" disabled={busy || !key}>{busy ? "Loading..." : "Load database"}</button>
+        <label>Admin key<input ref={keyInputRef} name="adminKey" defaultValue={key} onInput={(event) => setKey(event.currentTarget.value)} autoComplete="current-password" placeholder="ADMIN_KEY" type="password" /></label>
+        <button className="primary" disabled={busy}>{busy ? "Loading..." : "Load database"}</button>
       </form> : <div className="admin-session-card"><span>Admin connected</span><button className="secondary" type="button" onClick={() => load(key)} disabled={busy}>{busy ? "Refreshing..." : "Refresh"}</button><button className="secondary" type="button" onClick={changeKey}>Change key</button></div>}
       {error && <p className="form-error">{error}</p>}
 
