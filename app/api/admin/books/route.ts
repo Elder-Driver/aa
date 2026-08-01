@@ -1,10 +1,13 @@
 import { env } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
+import { getDb } from "../../../../db";
+import { books } from "../../../../db/schema";
+import { hashToken, token } from "../../../../db/service";
 
 type AdminBookRow = {
   id: string;
   name: string;
   currency: string;
-  inviteToken: string;
   createdAt: string;
   lastActivityAt: string;
   membersCount: number;
@@ -31,7 +34,6 @@ async function listBooks() {
       b.id,
       b.name,
       b.currency,
-      b.invite_token AS inviteToken,
       b.created_at AS createdAt,
       COALESCE((
         SELECT MAX(value) FROM (
@@ -75,6 +77,13 @@ export async function POST(request: Request) {
   try {
     requireAdmin(request);
     const body = await request.json().catch(() => ({})) as { action?: string; days?: number };
+    if (body.action === "reset-invite") {
+      const bookId = typeof (body as { bookId?: unknown }).bookId === "string" ? (body as { bookId: string }).bookId : "";
+      if (!bookId.startsWith("book_")) return jsonError("Invalid book id");
+      const inviteToken = token();
+      await getDb().update(books).set({ inviteTokenHash: await hashToken(inviteToken) }).where(eq(books.id, bookId));
+      return Response.json({ inviteToken });
+    }
     if (body.action !== "delete-empty") return jsonError("Unsupported admin action");
     const days = Number.isInteger(body.days) && body.days! >= 0 ? body.days! : 30;
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");

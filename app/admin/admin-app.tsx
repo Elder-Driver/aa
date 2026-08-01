@@ -7,7 +7,6 @@ type AdminBook = {
   id: string;
   name: string;
   currency: string;
-  inviteToken: string;
   createdAt: string;
   lastActivityAt: string;
   membersCount: number;
@@ -51,7 +50,7 @@ export function AdminApp() {
     try {
       const response = await fetch("/api/admin/books", { headers: { "x-admin-key": nextKey } });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "Unable to load admin data");
+      if (!response.ok) throw new Error(payload.error || `Unable to load admin data (${response.status})`);
       localStorage.setItem(adminKeyStorage, nextKey);
       setData(payload);
     } catch (err) {
@@ -100,11 +99,28 @@ export function AdminApp() {
     }
   }
 
-  async function copyInvite(book: AdminBook) {
-    const url = `${location.origin}/b/${encodeURIComponent(book.inviteToken)}`;
-    await navigator.clipboard.writeText(url);
-    setCopiedBook(book.id);
-    window.setTimeout(() => setCopiedBook(""), 1600);
+  async function resetAndCopyInvite(book: AdminBook) {
+    if (!confirm(`Create a new invite link for "${book.name}"? The old invite link will stop working.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/books", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-admin-key": key },
+        body: JSON.stringify({ action: "reset-invite", bookId: book.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Unable to reset invite link");
+      const url = `${location.origin}/b/${encodeURIComponent(payload.inviteToken)}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedBook(book.id);
+      window.setTimeout(() => setCopiedBook(""), 1600);
+      await load(key);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to reset invite link");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function removeBook(book: AdminBook) {
@@ -165,7 +181,7 @@ export function AdminApp() {
               <span>{ageDays(book.lastActivityAt)} days ago<small>{book.lastActivityAt}</small></span>
               <span>{book.membersCount} members · {book.expensesCount} expenses · {book.settlementsCount} payments</span>
               <span>{money(book.totalSpent, book.currency)}</span>
-              <span className="admin-actions"><button className="secondary" type="button" disabled={busy} onClick={() => copyInvite(book)}>{copiedBook === book.id ? "Copied" : "Copy link"}</button><button className="danger" type="button" disabled={busy} onClick={() => removeBook(book)}>Delete</button></span>
+              <span className="admin-actions"><button className="secondary" type="button" disabled={busy} onClick={() => resetAndCopyInvite(book)}>{copiedBook === book.id ? "Copied" : "New link"}</button><button className="danger" type="button" disabled={busy} onClick={() => removeBook(book)}>Delete</button></span>
             </div>)}
           </div>
         </section>
